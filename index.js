@@ -3,49 +3,61 @@
 var program = require('commander')
 var childProcess = require('child_process')
 var fs = require('fs')
+var Listr = require('listr')
 var port = process.env.port || 3000
 
-function startCommand(command, callback) {
-  var child = childProcess.exec(command, callback)
-  child.stdout.pipe(process.stdout)
-  child.stderr.pipe(process.stderr)
-  return child
+function copyFile(src, dest) {
+  return new Promise((resolve, reject) => {
+    fs.readFile(src, function(err1, data) {
+      if (err1) {
+        reject()
+        return
+      }
+
+      fs.writeFile(dest, data, function(err2) {
+        if (err2) {
+          reject()
+          return
+        }
+
+        resolve();
+      })
+    })
+  })
 }
 
 function init() {
+  var tasks = new Listr([
+    {
+      title: 'Copy index.js',
+      task: () => copyFile(
+        __dirname + '/templates/index.js',
+        'index.js'
+      ),
+    },
+    {
+      title: 'Copy package.json',
+      task: () => copyFile(
+        __dirname + '/templates/package.json',
+        'package.json'
+      ),
+    },
+    {
+      title: 'Installing dependencies',
+      task: () => new Promise((resolve, reject) => {
+        var child = childProcess.exec('npm install')
+        child.on('close', () => {
+          resolve();
+        });
+      }),
+    },
+  ]);
 
-  console.log('Creating new bot...')
-
-  fs.readFile(__dirname + '/templates/index.js', function(err, data) {
-    if (err) throw err
-
-    console.log('Copying index.js...')
-
-    fs.writeFile('index.js', data, function(err) {
-      if (err) throw err
-
-      console.log('Copied index.js...')
-    })
-  })
-
-  fs.readFile(__dirname + '/templates/package.json', function(err, data) {
-    if (err) throw err
-
-    console.log('Copying Package.json...')
-
-    fs.writeFile('package.json', data, function(err) {
-      if (err) throw err
-
-      console.log('Copied Package.json...')
-      console.log('Installing Dependencies...')
-
-      startCommand('npm install')
-    })
-  })
+  tasks.run();
 }
 
 function startServer() {
-  return startCommand('node .', function (error, stdout, stderr) {
+  childProcess.exec('node .', (err, stdout, stderr) => {
     process.exit(1)
   })
 }
